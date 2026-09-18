@@ -412,9 +412,10 @@ public class SecurityTests
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.PostAsJsonAsync("/api/v1/roles", new RoleInput("Escalated", Permissions.All))).StatusCode);
     }
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task WebSocketSessionTicketIsBoundAndSingleUse(bool acknowledgePolicy)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task WebSocketSessionTicketIsBoundAndSingleUse(bool acknowledgePolicy, bool changeTerminalPolicy)
     {
         using var factory = new Factory(); var a = await Seed(factory); using var client = Client(factory); await Login(client, a.Org);
         var operatorResponse = await client.PostAsJsonAsync("/api/v1/users", new UserInput("socket-operator@example.invalid", Password, "Operator"));
@@ -466,10 +467,26 @@ public class SecurityTests
         var rejected = await Record.ExceptionAsync(async () => await replayPeer.Receive(timeout.Token));
         Assert.NotNull(rejected); Assert.False(rejected is OperationCanceledException, "Replay must be actively rejected, not pass through a test timeout");
         using var administrator = Client(factory); await Login(administrator, a.Org);
-        (await administrator.PutAsJsonAsync($"/api/v1/users/{operatorId}/device-groups", new { groupIds = Array.Empty<Guid>() })).EnsureSuccessStatusCode();
+        if (changeTerminalPolicy)
+            (await administrator.PutAsJsonAsync($"/api/v1/devices/{a.Device}/terminal-policy", new { allowPrivilegeEscalation = false })).EnsureSuccessStatusCode();
+        else
+            (await administrator.PutAsJsonAsync($"/api/v1/users/{operatorId}/device-groups", new { groupIds = Array.Empty<Guid>() })).EnsureSuccessStatusCode();
         using var revokeDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         var revoked = await Record.ExceptionAsync(async () => await browserPeer.Receive(revokeDeadline.Token));
         Assert.NotNull(revoked); Assert.False(revoked is OperationCanceledException, "Group scope revocation must terminate the live socket");
+        if (changeTerminalPolicy)
+        {
+            using var closeDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            Assert.Equal("session.close", (await agentPeer.Receive(closeDeadline.Token)).Type);
+            var presence = await administrator.GetFromJsonAsync<JsonElement>($"/api/v1/devices/{a.Device}/presence");
+            Assert.True(presence.GetProperty("online").GetBoolean());
+            var nextResponse = await client.PostAsJsonAsync("/api/v1/remote-sessions", new SessionInput(a.Device, SessionKind.Terminal));
+            nextResponse.EnsureSuccessStatusCode();
+            var nextTicket = await nextResponse.Content.ReadFromJsonAsync<JsonElement>();
+            using var nextBrowser = await browserClient.ConnectAsync(new Uri("wss://localhost/ws/browser"), closeDeadline.Token);
+            await new Peer(nextBrowser).Send(Signal.Create("session.request", nextTicket.GetProperty("sessionId").GetGuid(), new { token = nextTicket.GetProperty("token").GetString() }), closeDeadline.Token);
+            Assert.Equal("session.request", (await agentPeer.Receive(closeDeadline.Token)).Type);
+        }
     }
     [Fact]
     public void TotpMatchesRfcVectorAndRejectsReplay()

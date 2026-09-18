@@ -80,6 +80,13 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
         catch { rebootRequests.TryRemove(command, out _); throw; }
         return new { commandId = command, status = "requested", expiresAt = expires };
     }
+    public void DisconnectTerminalSessions(Guid device)
+    {
+        // Keep the control socket and desktop sessions alive. Browser cleanup sends
+        // session.close to the agent and records the terminal end in the audit log.
+        foreach (var entry in browsers.Where(x => x.Value.Device == device && terminalPolicies.ContainsKey(x.Key)))
+            entry.Value.Browser.Socket.Abort();
+    }
     public void DisconnectDevice(Guid device)
     {
         if (agents.TryRemove(device, out var agent)) agent.Socket.Abort();
