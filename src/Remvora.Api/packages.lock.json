@@ -248,7 +248,6 @@
           "Remvora.Application": "[1.0.0, )"
         }
       }
-    },
-    "net10.0/win-x64": {}
+    }
   }
 }

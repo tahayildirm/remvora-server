@@ -114,7 +114,8 @@ public class SecurityTests
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync($"/api/v1/users/{id}", new UserUpdateInput("changed@example.invalid", "new-password-8", true, true))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await managed.GetAsync("/api/v1/auth/me")).StatusCode);
         Guid foreignUser;
-        using (var scope = factory.Services.CreateScope()) {
+        using (var scope = factory.Services.CreateScope())
+        {
             scope.ServiceProvider.GetRequiredService<Actor>().OrganizationId = b.Org;
             foreignUser = (await scope.ServiceProvider.GetRequiredService<Database>().Users.SingleAsync()).Id;
         }

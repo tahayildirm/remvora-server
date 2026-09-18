@@ -87,7 +87,8 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
         foreach (var entry in rebootRequests.Where(x => x.Value.Device == device)) rebootRequests.TryRemove(entry.Key, out _);
     }
     public bool Online(Guid device) => agents.TryGetValue(device, out var peer) && peer.IsAlive;
-    public object Presence(Guid device) => new {
+    public object Presence(Guid device) => new
+    {
         online = Online(device),
         busy = Online(device) && browsers.Values.Any(x => x.Device == device && x.Browser.Socket.State == WebSocketState.Open),
         lastSignalAt = agents.TryGetValue(device, out var peer) ? (DateTimeOffset?)peer.LastReceivedAt : null
