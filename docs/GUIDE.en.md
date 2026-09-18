@@ -152,3 +152,11 @@ openssl pkcs12 -export -inkey keyring.key -in keyring.crt -out keyring.pfx
 ```
 
 OpenSSL prompts for private-key and export passwords; do not disable encryption. Point Security__KeyRingCertificate at the resulting PFX and provide its export password through Security__KeyRingPassword. Restrict ACLs to the service/administrators, back up this material privately, and never place it in a static web directory or release ZIP. Preserve older keys/certificates needed to decrypt existing data when designing rotation. HTTPS still needs its own browser/agent-trusted certificate.
+
+## Per-device Linux terminal sudo/su policy
+
+The device list's **Terminal sudo/su** setting persists in the database and defaults to off. `devices.terminalPolicy` manages it; `devices.terminalElevation` permits elevated-capable terminal sessions on enabled devices. Owner/Admin have both; custom roles may receive them separately. Terminal access alone does not grant sudo/su permission. Tenant/device-group scope and audit logging apply.
+
+Linux only; agent 0.3.7+ is required. One-time local setup requires `--allow-terminal-privilege-escalation` and service `NoNewPrivileges=false`; routine changes then happen in the panel. Restricted sessions use `setpriv --no-new-privs`. This does not grant root or passwordless sudo: normal Linux permissions/passwords apply. Elevated-capable requests without local permission are explicitly rejected. Old agents lacking policy acknowledgement are rejected for terminal sessions; update the agent first.
+
+Saving disconnects the device and active sessions; the agent reconnects and new sessions use the updated policy. The watchdog also disconnects a terminal when its elevation permission is revoked. Previously started privileged processes or system changes are not undone. This is not a complete OS sandbox and does not restrict someone already controlling the device's OS account.

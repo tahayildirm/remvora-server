@@ -152,3 +152,11 @@ openssl pkcs12 -export -inkey keyring.key -in keyring.crt -out keyring.pfx
 ```
 
 OpenSSL özel anahtar/export parolalarını sorar; şifrelemeyi kapatmayın. Security__KeyRingCertificate oluşan PFX’i, Security__KeyRingPassword export parolasını göstermeli. ACL’yi servis/yöneticiyle sınırlayın; özel yedekleyin, web köküne veya yayın ZIP’ine koymayın. Rotasyonda eski veriyi çözmek için gereken anahtar/sertifikaları koruyun. HTTPS için ayrıca tarayıcı/agentin güvendiği sertifika gerekir.
+
+## Cihaz bazında Linux terminal sudo/su politikası
+
+Cihaz listesindeki **Terminal sudo/su** ayarı veritabanında kalıcıdır ve varsayılanı kapalıdır. `devices.terminalPolicy` yetkisi ayarı yönetir; `devices.terminalElevation` yetkisi açık cihazlarda yetki yükseltmeye izinli terminal açabilir. Owner/Admin ikisine de sahiptir; özel rollere ayrı ayrı verilebilir. Normal terminal yetkisi tek başına sudo/su izni sağlamaz. Tenant ve cihaz grubu kapsamı uygulanır; değişiklik audit kaydına yazılır.
+
+Ayar Linux içindir. Agent 0.3.7+ gerekir. Cihazda bir defalık yerel `--allow-terminal-privilege-escalation` izni ve servis düzeyinde `NoNewPrivileges=false` gerekir; ardından normal işletimde panelden yönetilir. Kapalı oturumlar `setpriv --no-new-privs` ile açılır. Root veya parolasız sudo yetkisi verilmez; mevcut Linux yetkileri/parolası geçerlidir. Yetkili açılış isteğinde yerel izin yoksa oturum açık hata ile reddedilir. Eski agent politika onayı vermiyorsa terminal oturumu reddedilir; önce agenti güncelleyin.
+
+Ayar kaydedildiğinde cihaz bağlantısı ve aktif oturumları kesilir; agent yeniden bağlanır. Yeni oturum güncel politikayı kullanır. Aktif terminalin yetkisi geri alınırsa watchdog bağlantıyı da kapatır. Önceden başlatılmış ayrıcalıklı işlemler ve yapılmış sistem değişiklikleri geri alınmaz. Bu ayar tam bir işletim sistemi sandbox'ı değildir; cihaz OS hesabını zaten kontrol eden kişileri sınırlamaz.

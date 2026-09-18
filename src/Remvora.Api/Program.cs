@@ -144,6 +144,12 @@ app.MapGet("/api/v1/devices", (DeviceService service, int? offset, int? limit, C
 app.MapGet("/api/v1/devices/{id:guid}", (Guid id, DeviceService service, CancellationToken ct) => service.Get(id, ct));
 app.MapPost("/api/v1/devices", async (DeviceInput input, DeviceService service, CancellationToken ct) => { var device = await service.Create(input, ct); return Results.Created($"/api/v1/devices/{device.Id}", device); });
 app.MapPatch("/api/v1/devices/{id:guid}", (Guid id, DeviceInput input, DeviceService service, CancellationToken ct) => service.Update(id, input, ct));
+app.MapPut("/api/v1/devices/{id:guid}/terminal-policy", async (Guid id, TerminalPolicyInput input, DeviceService service, SignalingHub hub, CancellationToken ct) =>
+{
+    await service.SetTerminalPolicy(id, input.AllowPrivilegeEscalation, ct);
+    hub.DisconnectDevice(id);
+    return Results.NoContent();
+});
 app.MapPatch("/api/v1/devices/{id:guid}/status", async (Guid id, DeviceStatusInput input, DeviceService service, CancellationToken ct) => { await service.SetEnabled(id, input.Enabled, ct); return Results.NoContent(); });
 app.MapDelete("/api/v1/devices/{id:guid}", async (Guid id, DeviceService service, CancellationToken ct) => { await service.Revoke(id, ct); return Results.NoContent(); });
 app.MapPost("/api/v1/devices/{id:guid}/delete-permanently", async (Guid id, PermanentDeleteInput input, DeviceService service, SignalingHub hub, CancellationToken ct) =>
@@ -192,6 +198,7 @@ public partial class Program { }
 public sealed record RoleChange(string Role);
 
 public sealed record DeviceStatusInput(bool Enabled);
+public sealed record TerminalPolicyInput(bool AllowPrivilegeEscalation);
 
 public sealed record DeviceGroupScopeInput(Guid[]? GroupIds);
 

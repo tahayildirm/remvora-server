@@ -183,6 +183,9 @@ namespace Remvora.Infrastructure.Migrations.MySQL
                     b.Property<string>("AgentVersion")
                         .HasColumnType("longtext");
 
+                    b.Property<bool>("AllowTerminalPrivilegeEscalation")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("Architecture")
                         .HasColumnType("longtext");
 

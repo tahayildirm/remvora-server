@@ -3,17 +3,20 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Remvora.Infrastructure;
 
 #nullable disable
 
-namespace Remvora.Infrastructure.Migrations.MariaDB
+namespace Remvora.Infrastructure.Migrations.MySQL
 {
-    [DbContext(typeof(MariaDbDatabase))]
-    partial class MariaDbDatabaseModelSnapshot : ModelSnapshot
+    [DbContext(typeof(MySqlDatabase))]
+    [Migration("20260918204657_TerminalPrivilegePolicy")]
+    partial class TerminalPrivilegePolicy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

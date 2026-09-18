@@ -57,6 +57,7 @@ public sealed class Peer(WebSocket socket, TimeProvider? timeProvider = null)
 /// <summary>Bounded single-node signaling. Every route is derived from a server-authorized session, never a peer-supplied device.</summary>
 public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensions.Options.IOptions<SecurityPolicy> policy)
 {
+    private readonly ConcurrentDictionary<Guid, bool> terminalPolicies = new();
     private readonly ConcurrentDictionary<Guid, Peer> agents = new();
     private readonly ConcurrentDictionary<Guid, (Guid Device, Peer Browser)> browsers = new();
     private readonly ConcurrentDictionary<Guid, (Guid Device, Guid Organization, DateTimeOffset Expires)> rebootRequests = new();
@@ -147,6 +148,15 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
                 if (!browsers.TryGetValue(id, out var target)) continue;
                 if (target.Device != deviceId) throw new DomainException("SIGNAL_INVALID");
                 if (signal.Type is not ("session.accept" or "session.reject" or "webrtc.answer" or "webrtc.iceCandidate" or "session.close" or "relay.ready" or "relay.data")) throw new DomainException("SIGNAL_INVALID");
+                if (signal.Type == "session.accept" && terminalPolicies.TryGetValue(id, out var requestedPolicy) &&
+                    (!signal.Payload.TryGetProperty("terminalPolicyVersion", out var version) || !version.TryGetInt32(out var policyVersion) || policyVersion != 1 ||
+                     !signal.Payload.TryGetProperty("terminalPrivilegeEscalation", out var applied) || applied.ValueKind is not (JsonValueKind.True or JsonValueKind.False) || applied.GetBoolean() != requestedPolicy))
+                {
+                    await target.Browser.ForwardToBrowser(Signal.Create("session.reject", id, new { code = "TERMINAL_POLICY_AGENT_UPDATE_REQUIRED" }), ct);
+                    await peer.Send(Signal.Create("session.close", id, new { }), ct);
+                    target.Browser.Socket.Abort();
+                    continue;
+                }
                 await target.Browser.ForwardToBrowser(signal, ct);
             }
         }
@@ -176,12 +186,15 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
             session = await db.RemoteSessions.SingleOrDefaultAsync(x => x.Id == first.SessionId && x.UserId == actor.UserId && x.TokenHash == hash && x.ConsumedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow, ct) ?? throw new DomainException("SESSION_INVALID");
             actor.Require(session.Kind == SessionKind.Terminal ? "devices.terminal" : "devices.remoteDesktop");
             if (!agents.TryGetValue(session.DeviceId, out agent) || !await db.Devices.AnyAsync(x => x.Id == session.DeviceId && x.EnrollmentStatus == EnrollmentStatus.Active, ct)) throw new DomainException("DEVICE_OFFLINE");
+            var terminalPolicy = session.Kind == SessionKind.Terminal && actor.Can("devices.terminalElevation") &&
+                await db.Devices.AnyAsync(x => x.Id == session.DeviceId && x.AllowTerminalPrivilegeEscalation, ct);
             session.ConsumedAt = DateTimeOffset.UtcNow;
             db.Audit.Add(new AuditEvent(actor.OrganizationId, actor.UserId, session.DeviceId, session.Kind == SessionKind.Terminal ? "TERMINAL_STARTED" : "REMOTE_DESKTOP_STARTED", actor.Ip, actor.UserAgent));
             await db.SaveChangesAsync(ct);
             if (!browsers.TryAdd(session.Id, (session.DeviceId, peer))) throw new DomainException("SESSION_INVALID");
-            watchdog = WatchUser(actor.OrganizationId, actor.UserId.Value, actor.SessionId, session.DeviceId, session.Kind, peer, lifetime);
-            await agent.Send(Signal.Create("session.request", session.Id, new { kind = session.Kind.ToString(), expiresAt = DateTimeOffset.UtcNow.AddMinutes(policy.Value.RemoteSessionMinutes) }), ct);
+            if (session.Kind == SessionKind.Terminal) terminalPolicies[session.Id] = terminalPolicy;
+            watchdog = WatchUser(actor.OrganizationId, actor.UserId.Value, actor.SessionId, session.DeviceId, session.Kind, terminalPolicy, peer, lifetime);
+            await agent.Send(Signal.Create("session.request", session.Id, new { kind = session.Kind.ToString(), allowTerminalPrivilegeEscalation = terminalPolicy, expiresAt = DateTimeOffset.UtcNow.AddMinutes(policy.Value.RemoteSessionMinutes) }), ct);
             var seen = new ReplayWindow(); var relayBudget = new RelayBudget(); var window = DateTimeOffset.UtcNow; var count = 0;
             while (!ct.IsCancellationRequested)
             {
@@ -198,6 +211,7 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
         finally
         {
             lifetime.Cancel(); socket.Abort(); if (watchdog is not null) await watchdog;
+            if (session is not null) terminalPolicies.TryRemove(session.Id, out _);
             if (session is not null && browsers.TryRemove(session.Id, out _))
             {
                 if (agent is not null) { try { using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2)); await agent.Send(Signal.Create("session.close", session.Id, new { }), timeout.Token); } catch (Exception ex) when (ex is WebSocketException or OperationCanceledException) { } }
@@ -228,7 +242,7 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
         catch (Exception ex) when (ex is OperationCanceledException or DbUpdateException) { }
         finally { lifetime.Cancel(); peer.Socket.Abort(); }
     }
-    private async Task WatchUser(Guid org, Guid user, Guid? userSession, Guid deviceId, SessionKind kind, Peer peer, CancellationTokenSource lifetime)
+    private async Task WatchUser(Guid org, Guid user, Guid? userSession, Guid deviceId, SessionKind kind, bool terminalPolicy, Peer peer, CancellationTokenSource lifetime)
     {
         try
         {
@@ -240,7 +254,13 @@ public sealed class SignalingHub(IServiceScopeFactory scopes, Microsoft.Extensio
                 var account = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == user, lifetime.Token);
                 var requestActor = scope.ServiceProvider.GetRequiredService<Actor>();
                 requestActor.DeviceGroups = account?.DeviceGroupScope is null ? null : System.Text.Json.JsonSerializer.Deserialize<Guid[]>(account.DeviceGroupScope) ?? [];
-                if (!await db.Devices.AnyAsync(x => x.Id == deviceId, lifetime.Token)) break;
+                var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == deviceId, lifetime.Token);
+                if (device is null) break;
+                if (kind == SessionKind.Terminal && account is not null)
+                {
+                    var permissions = await UserAdministration.ResolvePermissions(db, account.Role, lifetime.Token);
+                    if (terminalPolicy != (device.AllowTerminalPrivilegeEscalation && permissions.Contains("devices.terminalElevation"))) break;
+                }
                 if (account is null || !(await UserAdministration.ResolvePermissions(db, account.Role, lifetime.Token)).Contains(kind == SessionKind.Terminal ? "devices.terminal" : "devices.remoteDesktop") || !await db.Sessions.AnyAsync(x => x.Id == userSession && x.RevokedAt == null && x.ExpiresAt > DateTimeOffset.UtcNow, lifetime.Token)) break;
             }
         }

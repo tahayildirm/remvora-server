@@ -33,6 +33,9 @@ public sealed class Device : TenantEntity
     public string? OperatingSystem { get; private set; }
     public string? Architecture { get; private set; }
     public string? AgentVersion { get; private set; }
+    public bool AllowTerminalPrivilegeEscalation { get; private set; }
+    public void SetTerminalPrivilegeEscalation(bool allowed)
+    { AllowTerminalPrivilegeEscalation = allowed; UpdatedAt = DateTimeOffset.UtcNow; }
     public EnrollmentStatus EnrollmentStatus { get; private set; }
     public DateTimeOffset? LastSeenAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;

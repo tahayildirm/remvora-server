@@ -56,6 +56,40 @@ public class SecurityTests
         var response = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginInput(org, "test@example.invalid", Password, code)); Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
     [Fact]
+    public async Task TerminalPolicyIsPersistentAuditedAndTenantScoped()
+    {
+        using var factory = new Factory(); var a = await Seed(factory); var b = await Seed(factory);
+        using (var scope = factory.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Actor>().OrganizationId = a.Org;
+            var db = scope.ServiceProvider.GetRequiredService<Database>();
+            var device = await db.Devices.SingleAsync(x => x.Id == a.Device);
+            device.RequestEnrollment("test-key", "linux", "aarch64", "0.3.7");
+            await db.SaveChangesAsync();
+        }
+        using var client = Client(factory); await Login(client, a.Org);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync($"/api/v1/devices/{a.Device}/terminal-policy", new { allowPrivilegeEscalation = true })).StatusCode);
+        var saved = await client.GetFromJsonAsync<JsonElement>($"/api/v1/devices/{a.Device}");
+        Assert.True(saved.GetProperty("allowTerminalPrivilegeEscalation").GetBoolean());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync($"/api/v1/devices/{b.Device}/terminal-policy", new { allowPrivilegeEscalation = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync($"/api/v1/devices/{a.Device}/terminal-policy", new { allowPrivilegeEscalation = false })).StatusCode);
+        using var check = factory.Services.CreateScope(); check.ServiceProvider.GetRequiredService<Actor>().OrganizationId = a.Org;
+        var result = check.ServiceProvider.GetRequiredService<Database>();
+        Assert.False((await result.Devices.SingleAsync(x => x.Id == a.Device)).AllowTerminalPrivilegeEscalation);
+        Assert.True(await result.Audit.AnyAsync(x => x.DeviceId == a.Device && x.EventType == "TERMINAL_ELEVATION_ALLOWED"));
+        Assert.True(await result.Audit.AnyAsync(x => x.DeviceId == a.Device && x.EventType == "TERMINAL_ELEVATION_BLOCKED"));
+    }
+    [Theory]
+    [InlineData("Viewer")]
+    [InlineData("Operator")]
+    public async Task TerminalUseDoesNotGrantPolicyManagement(string role)
+    {
+        using var factory = new Factory(); var a = await Seed(factory, role);
+        using var client = Client(factory); await Login(client, a.Org);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync($"/api/v1/devices/{a.Device}/terminal-policy", new { allowPrivilegeEscalation = true })).StatusCode);
+        Assert.DoesNotContain("devices.terminalElevation", Permissions.ForRole(role));
+    }
+    [Fact]
     public async Task PermanentDeletionRequiresConfirmationAndRemovesOperationalRecordsOnly()
     {
         using var factory = new Factory(); var a = await Seed(factory); var b = await Seed(factory);
@@ -377,8 +411,10 @@ public class SecurityTests
         Assert.Equal(HttpStatusCode.OK, (await reader.GetAsync("/api/v1/devices")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await reader.PostAsJsonAsync("/api/v1/roles", new RoleInput("Escalated", Permissions.All))).StatusCode);
     }
-    [Fact]
-    public async Task WebSocketSessionTicketIsBoundAndSingleUse()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WebSocketSessionTicketIsBoundAndSingleUse(bool acknowledgePolicy)
     {
         using var factory = new Factory(); var a = await Seed(factory); using var client = Client(factory); await Login(client, a.Org);
         var operatorResponse = await client.PostAsJsonAsync("/api/v1/users", new UserInput("socket-operator@example.invalid", Password, "Operator"));
@@ -404,7 +440,16 @@ public class SecurityTests
         using var browser = await browserClient.ConnectAsync(new Uri("wss://localhost/ws/browser"), timeout.Token); var browserPeer = new Peer(browser);
         await browserPeer.Send(Signal.Create("session.request", sessionId, new { token = ticket.GetProperty("token").GetString() }), timeout.Token);
         var request = await agentPeer.Receive(timeout.Token); Assert.Equal("session.request", request.Type); Assert.Equal("Terminal", request.Payload.GetProperty("kind").GetString());
-        await agentPeer.Send(Signal.Create("session.accept", sessionId, new { }), timeout.Token); Assert.Equal("session.accept", (await browserPeer.Receive(timeout.Token)).Type);
+        Assert.False(request.Payload.GetProperty("allowTerminalPrivilegeEscalation").GetBoolean());
+        if (!acknowledgePolicy)
+        {
+            await agentPeer.Send(Signal.Create("session.accept", sessionId, new { }), timeout.Token);
+            var rejectedPolicy = await browserPeer.Receive(timeout.Token);
+            Assert.Equal("session.reject", rejectedPolicy.Type);
+            Assert.Equal("TERMINAL_POLICY_AGENT_UPDATE_REQUIRED", rejectedPolicy.Payload.GetProperty("code").GetString());
+            return;
+        }
+        await agentPeer.Send(Signal.Create("session.accept", sessionId, new { terminalPolicyVersion = 1, terminalPrivilegeEscalation = false }), timeout.Token); Assert.Equal("session.accept", (await browserPeer.Receive(timeout.Token)).Type);
         await browserPeer.Send(Signal.Create("session.heartbeat", sessionId, new { }), timeout.Token);
         await browserPeer.Send(Signal.Create("relay.start", sessionId, new { }), timeout.Token);
         Assert.Equal("relay.start", (await agentPeer.Receive(timeout.Token)).Type);

@@ -183,6 +183,9 @@ namespace Remvora.Infrastructure.Migrations.PostgreSQL
                     b.Property<string>("AgentVersion")
                         .HasColumnType("text");
 
+                    b.Property<bool>("AllowTerminalPrivilegeEscalation")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Architecture")
                         .HasColumnType("text");
 

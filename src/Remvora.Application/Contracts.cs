@@ -22,7 +22,7 @@ public sealed class Actor
 }
 public static class Permissions
 {
-    public static readonly string[] All = ["devices.view", "devices.create", "devices.edit", "devices.delete", "devices.remoteDesktop", "devices.terminal", "devices.reboot", "groups.manage", "contacts.manage", "locations.manage", "users.manage", "apiKeys.manage", "audit.view", "enrollment.manage"];
+    public static readonly string[] All = ["devices.view", "devices.create", "devices.edit", "devices.delete", "devices.remoteDesktop", "devices.terminal", "devices.reboot", "devices.terminalPolicy", "devices.terminalElevation", "groups.manage", "contacts.manage", "locations.manage", "users.manage", "apiKeys.manage", "audit.view", "enrollment.manage"];
     public static HashSet<string> ForRole(string role) => role switch
     {
         "Owner" or "Admin" => [.. All],
@@ -62,6 +62,15 @@ public sealed class DeviceService(IDeviceRepository repository, Actor actor)
     {
         actor.Require("devices.edit"); var device = await repository.Find(id, ct) ?? throw new DomainException("NOT_FOUND");
         device.Rename(input.Name, input.Description); await repository.Save(device, false, "DEVICE_UPDATED", ct); return device;
+    }
+    public async Task SetTerminalPolicy(Guid id, bool allowed, CancellationToken ct)
+    {
+        actor.Require("devices.terminalPolicy");
+        var device = await repository.Find(id, ct) ?? throw new DomainException("NOT_FOUND");
+        if (allowed && !string.Equals(device.OperatingSystem, "linux", StringComparison.OrdinalIgnoreCase))
+            throw new DomainException("TERMINAL_POLICY_LINUX_ONLY");
+        device.SetTerminalPrivilegeEscalation(allowed);
+        await repository.Save(device, false, allowed ? "TERMINAL_ELEVATION_ALLOWED" : "TERMINAL_ELEVATION_BLOCKED", ct);
     }
     public async Task SetEnabled(Guid id, bool enabled, CancellationToken ct)
     {
