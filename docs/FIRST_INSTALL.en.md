@@ -172,7 +172,7 @@ An alternative for a hosting provider without interactive console access is [ini
 {"email":"owner@example.com","password":"REPLACE_WITH_UNIQUE_OWNER_PASSWORD","organization":"My organization"}
 ```
 
-The provider runs `powershell -File initialize.ps1 -ApplicationPath "D:\YOUR_API_PUBLISH_DIRECTORY"`. The script runs migration and bootstrap, deletes the bootstrap file only on success and keeps maintenance enabled. On failure protect the file and remove it after resolving the problem. Never put this password in a repository, web-panel directory or public support ticket. Prefer private interactive/environment input when available.
+The script lives at `deploy/windows/initialize.ps1` in the source checkout and is not automatically included in the publish ZIP. Transfer it separately to a protected administration directory accessible to the provider and use its actual path in the command. The provider runs `powershell -File initialize.ps1 -ApplicationPath "D:\YOUR_API_PUBLISH_DIRECTORY"`. The script runs migration and bootstrap, deletes the bootstrap file only on success and keeps maintenance enabled. On failure protect the file and remove it after resolving the problem. Never put this password in a repository, web-panel directory or public support ticket. Prefer private interactive/environment input when available.
 
 ## 7. Open the application and sign in
 

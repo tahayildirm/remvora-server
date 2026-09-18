@@ -176,7 +176,7 @@ Konsolsuz hosting için sağlayıcının çalıştırabileceği alternatif: [ini
 {"email":"owner@example.com","password":"REPLACE_WITH_UNIQUE_OWNER_PASSWORD","organization":"My organization"}
 ```
 
-Sağlayıcı `powershell -File initialize.ps1 -ApplicationPath "D:\YOUR_API_PUBLISH_DIRECTORY"` çalıştırır. Betik migration ve bootstrap yapar, yalnız başarıda bootstrap dosyasını siler; bakımı açık bırakır. Başarısızlıkta dosyayı korunan alanda tutun ve inceleme bitince kaldırın. İlk kullanıcı parolasını kaynak deposuna, web paneline veya açık destek kaydına koymayın. CLI/gizli ortam girdisi tercih edilir.
+Bu betik kaynak depoda `deploy/windows/initialize.ps1` yolundadır; yayın ZIP’i onu otomatik içermez. Betiği sağlayıcının erişebileceği korunan bir yönetim dizinine ayrıca aktarın ve komutta betiğin gerçek yolunu kullanın. Sağlayıcı `powershell -File initialize.ps1 -ApplicationPath "D:\YOUR_API_PUBLISH_DIRECTORY"` çalıştırır. Betik migration ve bootstrap yapar, yalnız başarıda bootstrap dosyasını siler; bakımı açık bırakır. Başarısızlıkta dosyayı korunan alanda tutun ve inceleme bitince kaldırın. İlk kullanıcı parolasını kaynak deposuna, web paneline veya açık destek kaydına koymayın. CLI/gizli ortam girdisi tercih edilir.
 
 ## 7. Yayını açın ve giriş yapın
 
