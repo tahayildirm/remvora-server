@@ -28,3 +28,7 @@ Yukarıdaki komutlarla win-x64 derleyip kendi origin/provider değerlerinizle pa
 Yayın dizininde `Remvora.Api.exe --migrate`; yalnız **yeni boş kurulumda** gizli REMVORA_ADMIN_EMAIL/PASSWORD (8–256)/ORGANIZATION ortamını verip `--bootstrap` çalıştırın. Sonra geçici sırları temizleyin. Mevcut kurulumda sadece migration çalışır. Başka kurulumun parolasını kullanmayın. Başarı sonrası bakımı kaldırıp HTTPS health/readiness, giriş ve gerçek agent WSS oturumunu test edin.
 
 initialize.ps1 isteğe bağlı ilk-kurulum yardımcısıdır; bakım dosyası, korunan appsettings.Production.json ve email/password/organization içeren App_Data/bootstrap.json ister. Başarıda bootstrap dosyasını siler, süreç ortamını geri alır, bakımı açık bırakır. Güncellemede kullanmayın. Geçici parola dosyası istemiyorsanız doğrudan gizli ortamla CLI kullanın. Yayın ZIP’leri iş bittikten sonra genel web kökünde kalmasın. Kurtarmada ayar/key-ring/veritabanını birlikte koruyun. Hosting parolası paketle verilmez.
+
+## First installation / İlk kurulum
+
+[English: hosting, database and first Owner](../../docs/FIRST_INSTALL.en.md) · [Türkçe: hosting, veritabanı ve ilk Owner](../../docs/FIRST_INSTALL.tr.md).

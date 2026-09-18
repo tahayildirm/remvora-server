@@ -1,5 +1,6 @@
 # Remvora Server — kurulum ve yönetim
 
+**Yeni kurulum: [Veritabanı ve ilk Owner dahil adım adım başlangıç](FIRST_INSTALL.tr.md).**
 [Türkçe](GUIDE.tr.md) · [English](GUIDE.en.md) · [Yayın kontrolü](PUBLIC_RELEASE.md)
 
 ## Nedir, kimler kullanır?

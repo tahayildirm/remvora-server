@@ -1,5 +1,6 @@
 # Remvora Server — installation and administration
 
+**Fresh installation: [Step-by-step database and first Owner setup](FIRST_INSTALL.en.md).**
 [English](GUIDE.en.md) · [Türkçe](GUIDE.tr.md) · [Release checklist](PUBLIC_RELEASE.md)
 
 ## What it is, and who it is for
