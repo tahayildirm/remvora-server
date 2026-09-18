@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Remvora.Api/Remvora.Api.csproj" />
+    <Project Path="src/Remvora.Application/Remvora.Application.csproj" />
+    <Project Path="src/Remvora.Domain/Remvora.Domain.csproj" />
+    <Project Path="src/Remvora.Infrastructure/Remvora.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Remvora.Api.IntegrationTests/Remvora.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Remvora.Domain.Tests/Remvora.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

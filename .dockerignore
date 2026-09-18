@@ -1,0 +1,9 @@
+**/bin
+**/obj
+.runtime
+**/.runtime
+.backups
+.artifacts
+.git
+.tools
+.env

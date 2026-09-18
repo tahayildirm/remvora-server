@@ -1,0 +1,25 @@
+name: Control server
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [PostgreSQL, MySQL, MariaDB]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Start isolated database
+        env:
+          PROVIDER: ${{ matrix.provider }}
+        run: bash scripts/ci-database.sh
+      - run: dotnet restore --locked-mode
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet format --verify-no-changes --no-restore --exclude src/Remvora.Infrastructure/Migrations
+      - run: dotnet test --no-build --configuration Release
+      - run: dotnet list package --vulnerable --include-transitive
